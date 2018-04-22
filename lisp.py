@@ -76,7 +76,7 @@ def make_linked_list(iterable):
     return start
 
 def recursive_mll(iterable):
-    "Makes a linked list out of an iterable. Any iterables inside the 
+    """Makes a linked list out of an iterable. Any iterables inside the 
     iterable are make into linked lists too, and so on."""
     new = []
     for i in iterable:
