@@ -11,9 +11,14 @@ class LispFunction:
     """A callable lisp function."""
     def __init__(self, lambdaexpr, env):
         self.lambdaexpr = lambdaexpr #get body of self
-        self.args = list(iterate(self.lambdaexpr.cdr.car)) #cdr.car (lambda (x) ...) = (x)
-        self.returnv = self.lambdaexpr.cdr.cdr.car #cdr.cdr.car of (lambda (x y) (do x y z...)) is cdr.car of ((x y) (do x y z)) is (do x y z)
-        self.env = env #Le epic lexical scoping    #PLEASE NOTE -- lambdas only take one expression. if you want to use more than one, use a (begin ...)
+        self.args = list(iterate(self.lambdaexpr.cdr.car))
+        #cdr.car (lambda (x) ...) = (x)
+        self.returnv = self.lambdaexpr.cdr.cdr.car
+        #cdr.cdr.car of (lambda (x y) (do x y z...))
+        #is cdr.car of ((x y) (do x y z)) is (do x y z)
+        self.env = env #Le epic lexical scoping
+        #PLEASE NOTE -- lambdas only take one expression.
+        #if you want to use more than one, use a (begin ...)
     def __call__(self, *vals):
         newenv = Environment(self.env, parent=self.env)
         newenv.update(zip(self.args,vals)) #defines the arguments' values to be the values passed in
@@ -203,7 +208,8 @@ def defaultenv():
         #LOGIC
         ('and', (lambda x, y: (x != None) and (y != None))), #PLEASE NOTE
         ('or', (lambda x, y: (x != None) or (y != None))),   #THESE DO NOT SHORT CIRCUIT, AS I DON'T WANT TO WRITE ANOTHER DAMN SPECIAL FORM
-        ('not', (lambda x: "t" if x == None else None))
+        ('not', (lambda x: "t" if x == None else None)),
+        ('number?', (lambda x: type(x) == int or type(x) == float))
     ])
     return env
 
