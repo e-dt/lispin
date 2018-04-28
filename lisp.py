@@ -25,7 +25,7 @@ class Cons: #Pair object
         return "(" + repr(self.car) + " . " + repr(self.cdr) +")"
 class LispFunction:
     """A callable lisp function."""
-    def __init__(self, lambdaexpr, env):
+    def __init__(self, lambdaexpr, env, macros):
         self.lambdaexpr = lambdaexpr #get body of self
         self.args = list(iterate(self.lambdaexpr.cdr.car))
         #cdr.car (lambda (x) ...) = (x)
@@ -38,7 +38,8 @@ class LispFunction:
     def __call__(self, *vals):
         newenv = Environment(self.env, parent=self.env)
         newenv.update(zip(self.args,vals)) #defines the arguments' values to be the values passed in
-        return apply(self.returnv, newenv)
+
+        return evaluate(self.returnv, newenv, macros)
         
 
 class Environment(dict):
@@ -169,36 +170,44 @@ def func_n_vals(function):
     vals = [i for i in iterate(function.cdr)] #list comprehensions r fun!
     return func, vals
 
-def apply(function, localvars):
+def apply(function, localvars, macros):
     """Applies a function in an environment."""
     if function.car == 'quote': #required to fix a bug
-        return consappl.cdr.car #i knew why once, but no longer
+        return function.cdr.car #i knew why once, but no longer
     func, vals = func_n_vals(function)
     if func == 'cond':
         for cons in vals:
-            if evaluate(cons.car, localvars) != None:    #None is the only false value; it is also the empty list.
-                return evaluate(cons.cdr.car, localvars) #
+            if evaluate(cons.car, localvars, macros) != None:    #None is the only false value; it is also the empty list.
+                return evaluate(cons.cdr.car, localvars, macros) #
         raise Exception('no default in cond, and it fell through!!') #should this be the behaviour? discuss.
     elif func == 'lambda': 
-        return LispFunction(function, localvars)
+        return LispFunction(function, localvars, macros)
     elif func == 'define':
-        localvars[vals[0]] = evaluate(vals[1], localvars)
+        localvars[vals[0]] = evaluate(vals[1], localvars, macros)
         return localvars[vals[0]]
     elif func == 'set!':
-        localvars.innermost(vals[0])[vals[0]] = evaluate(vals[1], localvars)
+        localvars.innermost(vals[0])[vals[0]] = evaluate(vals[1], localvars, macros)
+    elif func == 'defmacro':
+        macros[vals[0]] =  evaluate(vals[1], localvars, macros)
     else: #defined
-        func = evaluate(func, localvars)
-        vals = [evaluate(val,localvars) for val in vals]
+        func = evaluate(func, localvars, macros)
+        vals = [evaluate(val,localvars, macros) for val in vals]
         return func(*vals) #for builtins
-def evaluate(expr,localvars):
+def evaluate(expr,localvars,macros):
     if type(expr)== Cons:
-        return apply(expr,localvars)
+        return apply(macroexpand(expr,localvars,macros),localvars, macros)
     else:
         if type(expr) == str:
             return localvars.innermost(expr)[expr]#variables!
         else:
             return expr
-
+def macroexpand(expr, localvars, macros):
+    try:
+        func, vals = func_n_vals(expr)
+        macro = macros.innermost(func)[func]
+        return macro(*vals)
+    except:
+        return expr
 def defaultenv():
     """Creates a sane environment."""
     env = Environment({}, parent=None)
@@ -220,7 +229,7 @@ def defaultenv():
         ('+', (lambda x, y: x+y)),
         ('-', (lambda x, y: x-y)),
         ('*', (lambda x, y: x*y)),
-        ('/', (lambda x, y: x/y))
+        ('/', (lambda x, y: x/y)),
         #LOGIC
         ('and', (lambda x, y: (x != None) and (y != None))), #PLEASE NOTE
         ('or', (lambda x, y: (x != None) or (y != None))),   #THESE DO NOT SHORT CIRCUIT, AS I DON'T WANT TO WRITE ANOTHER DAMN SPECIAL FORM
@@ -230,16 +239,18 @@ def defaultenv():
     return env
 
 globals = defaultenv()
+macros = Environment({}, parent=None)
 def execute(parsed):         #executes program
     """Executes program."""
     for i in iterate(parsed):
-        apply(i, globals)    #run each lisp.
+        evaluate(i, globals, macros)    #run each lisp.
 
 def run(program):
     execute(syntax_sugar(parse(tokenise(program))))
 
 if __name__ == "__main__": #auto-test
     test= """
+(defmacro zz (lambda (y) (cons 'car (cons y '()))))
 (define fibonacci
  (lambda (n)
   (cond
@@ -250,6 +261,7 @@ if __name__ == "__main__": #auto-test
  )
 )
 
-(write (fibonacci 5))
+(write (fibonacci 7))
+(write (zz '(x y)))
 """
     run(test)
