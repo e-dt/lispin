@@ -14,16 +14,16 @@
 #
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+def pretty_print(lst):
+    new = []
+    for i in iterate(lst):
+        if type(i) != Cons: 
+            new.append(i)
+        else:
+            new.append(pretty_print(i))
+    return new
 def pretty(lt):
     #for debugging purposes only
-    def pretty_print(lst):
-        new = []
-        for i in iterate(lst):
-            if type(i) != Cons: 
-                new.append(i)
-            else:
-                new.append(pretty_print(i))
-        return new
     print(pretty_print(lt))
 class Cons: #Pair object
     """A pair."""
