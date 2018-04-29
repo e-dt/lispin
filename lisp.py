@@ -255,14 +255,16 @@ def defaultenv():
         #LISTS
         ('list', lst)
     ])
-    return env
+    #MACROS
+    macros = Environment({}, parent = None)
+    #TODO: find out way to build in macros
+    return env,macros
 
-globals = defaultenv()
-macros = Environment({}, parent=None)
+globalz,macros = defaultenv()
 def execute(parsed):         #executes program
     """Executes program."""
     for i in iterate(parsed):
-        evaluate(i, globals, macros)    #run each lisp.
+        evaluate(i, globalz, macros)    #run each lisp.
 
 def run(program):
     execute(syntax_sugar(parse(tokenise(program))))
@@ -289,6 +291,6 @@ if __name__ == "__main__": #auto-test
 )
 
 (write (fibonacci 7))
-(write (or '() 2))
+(write ((lambda (t) (or t 2)) '()))
 """
     run(test)
