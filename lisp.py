@@ -1,3 +1,4 @@
+
 #Lispin. A lisp interpreter.
 #    Copyright (C) 2018  e-dt
 #
@@ -13,7 +14,17 @@
 #
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
+def pretty(lt):
+    #for debugging purposes only
+    def pretty_print(lst):
+        new = []
+        for i in iterate(lst):
+            if type(i) != Cons: 
+                new.append(i)
+            else:
+                new.append(pretty_print(i))
+        return new
+    print(pretty_print(lt))
 class Cons: #Pair object
     """A pair."""
     def __init__(self, car, cdr):
@@ -35,11 +46,13 @@ class LispFunction:
         self.env = env #Le epic lexical scoping
         #PLEASE NOTE -- lambdas only take one expression.
         #if you want to use more than one, use a (begin ...)
+        self.macros = macros
     def __call__(self, *vals):
         newenv = Environment(self.env, parent=self.env)
         newenv.update(zip(self.args,vals)) #defines the arguments' values to be the values passed in
-
-        return evaluate(self.returnv, newenv, macros)
+        return evaluate(self.returnv, newenv, Environment(self.macros,parent=self.macros))
+    def __repr__(self):
+        return "func" #debugging
         
 
 class Environment(dict):
@@ -172,8 +185,12 @@ def func_n_vals(function):
 
 def apply(function, localvars, macros):
     """Applies a function in an environment."""
+    try:
+        function = macroexpand(function, localvars, macros)
+    except:
+        pass
     if function.car == 'quote': #required to fix a bug
-        return function.cdr.car #i knew why once, but no longer
+        return function.cdr.car #maybe? unnecessary but who knows
     func, vals = func_n_vals(function)
     if func == 'cond':
         for cons in vals:
@@ -194,20 +211,17 @@ def apply(function, localvars, macros):
         vals = [evaluate(val,localvars, macros) for val in vals]
         return func(*vals) #for builtins
 def evaluate(expr,localvars,macros):
-    if type(expr)== Cons:
-        return apply(macroexpand(expr,localvars,macros),localvars, macros)
+    if type(expr) == Cons:
+        return apply(expr,localvars, macros)
     else:
         if type(expr) == str:
             return localvars.innermost(expr)[expr]#variables!
         else:
             return expr
 def macroexpand(expr, localvars, macros):
-    try:
-        func, vals = func_n_vals(expr)
-        macro = macros.innermost(func)[func]
-        return macro(*vals)
-    except:
-        return expr
+    func, vals = func_n_vals(expr)
+    macro = macros.innermost(func)[func]
+    return macro(*vals)
 def defaultenv():
     """Creates a sane environment."""
     env = Environment({}, parent=None)
@@ -217,6 +231,9 @@ def defaultenv():
         return "t" if val0 == val1 else None 
     def begin(*vals):
         return vals[-1] #all arguments are evaluated, the last is returned. nice
+    def lst(*vals):
+        return make_linked_list(vals)
+    
     env.update([
         ('eq?', eq), #('eq?', (lambda x,y: x is y), #SCHEME VERSION
         ('car', (lambda x: x.car)),
@@ -231,10 +248,12 @@ def defaultenv():
         ('*', (lambda x, y: x*y)),
         ('/', (lambda x, y: x/y)),
         #LOGIC
-        ('and', (lambda x, y: (x != None) and (y != None))), #PLEASE NOTE
-        ('or', (lambda x, y: (x != None) or (y != None))),   #THESE DO NOT SHORT CIRCUIT, AS I DON'T WANT TO WRITE ANOTHER DAMN SPECIAL FORM
+        ('and', (lambda x, y: (x != None) and (y != None))), #PLEASE NOTE NONTY SPECIAL FORM
+        #TODO: write as le epic macro !
         ('not', (lambda x: "t" if x == None else None)),
-        ('number?', (lambda x: type(x) == int or type(x) == float))
+        ('number?', (lambda x: type(x) == int or type(x) == float)),
+        #LISTS
+        ('list', lst)
     ])
     return env
 
@@ -249,8 +268,9 @@ def run(program):
     execute(syntax_sugar(parse(tokenise(program))))
 
 if __name__ == "__main__": #auto-test
-    test= """
-(defmacro zz (lambda (y) (cons 'car (cons y '()))))
+    test = """
+(defmacro or (lambda (x y) ((lambda ($gensym?$my-long-name$add-hygiene-later$)
+                                    (list 'cond (list $gensym?$my-long-name$add-hygiene-later$ $gensym?$my-long-name$add-hygiene-later$) (list '(quote t) y))) x)))
 (define fibonacci
  (lambda (n)
   (cond
@@ -262,6 +282,6 @@ if __name__ == "__main__": #auto-test
 )
 
 (write (fibonacci 7))
-(write (zz '(x y)))
+(write (or '() 2))
 """
     run(test)
