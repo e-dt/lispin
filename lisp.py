@@ -268,9 +268,16 @@ def run(program):
     execute(syntax_sugar(parse(tokenise(program))))
 
 if __name__ == "__main__": #auto-test
-    test = """
-(defmacro or (lambda (x y) ((lambda ($gensym?$my-long-name$add-hygiene-later$)
-                                    (list 'cond (list $gensym?$my-long-name$add-hygiene-later$ $gensym?$my-long-name$add-hygiene-later$) (list '(quote t) y))) x)))
+    test ="""
+(defmacro or
+ (lambda (x y)
+  ((lambda ($gensym?$my-long-name$add-hygiene-later$)
+   (list 'cond
+    (list $gensym?$my-long-name$add-hygiene-later$ $gensym?$my-long-name$add-hygiene-later$)
+    (list '(quote t) y)))
+  x)
+ )
+)
 (define fibonacci
  (lambda (n)
   (cond
