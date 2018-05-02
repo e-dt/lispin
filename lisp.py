@@ -14,6 +14,7 @@
 #
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+import copy
 def pretty_print(lst):
     new = []
     for i in iterate(lst):
@@ -185,6 +186,7 @@ def func_n_vals(function):
 
 def apply(function, localvars, macros):
     """Applies a function in an environment."""
+    global startvars
     try:
         function = macroexpand(function, localvars, macros)
     except:
@@ -204,11 +206,27 @@ def apply(function, localvars, macros):
         return localvars[vals[0]]
     elif func == 'set!':
         localvars.innermost(vals[0])[vals[0]] = evaluate(vals[1], localvars, macros)
+        return localvars.innermost(vals[0])[vals[0]]
     elif func == 'defmacro':
         macros[vals[0]] =  evaluate(vals[1], localvars, macros)
+    elif func == 'current-env':
+        return (copy.deepcopy(localvars),#here the mutable nature of dicts
+                copy.deepcopy(macros))   #works against us, requiring a copy
+    elif func == 'let-env':
+        newvars, newmacros = evaluate(vals[0], localvars, macros)
+        a=LispFunction(recursive_mll(["lambda", [[]], vals[1]]),
+                       newvars, newmacros)
+        return a()
+    elif func == 'set-env!':
+        newvars, newmacros = evaluate(vals[0], localvars, macros)
+        if localvars is startvars: #i.e. if top-level (dicts mutable)
+            startvars = newvars
+        localvars = newvars
+        macros = newmacros
+        return None
     else: #defined
         func = evaluate(func, localvars, macros)
-        vals = [evaluate(val,localvars, macros) for val in vals]
+        vals = [evaluate(val, localvars, macros) for val in vals]
         return func(*vals) #for builtins
 def evaluate(expr,localvars,macros):
     if type(expr) == Cons:
@@ -233,7 +251,6 @@ def defaultenv():
         return vals[-1] #all arguments are evaluated, the last is returned. nice
     def lst(*vals):
         return make_linked_list(vals)
-    
     env.update([
         ('eq?', eq), #('eq?', (lambda x,y: x is y), #SCHEME VERSION
         ('car', (lambda x: x.car)),
@@ -241,6 +258,7 @@ def defaultenv():
         ('cons', (lambda x, y: Cons(x, y))),
         ('atom?', (lambda x: not isinstance(x, Cons))),
         ('begin', begin),
+        ('exit', (lambda x=None: exit() if x == None else exit(x))),
         ('write', (lambda x: print(x) or x)), #dirty hack -- print always returns None :. this always returns x, but prints x first.
         #MATHS
         ('+', (lambda x, y: x+y)),
@@ -249,7 +267,7 @@ def defaultenv():
         ('/', (lambda x, y: x/y)),
         #LOGIC
         ('and', (lambda x, y: (x != None) and (y != None))), #PLEASE NOTE NONTY SPECIAL FORM
-        #TODO: write as le epic macro !
+        #TODO: write as macro !
         ('not', (lambda x: "t" if x == None else None)),
         ('number?', (lambda x: type(x) == int or type(x) == float)),
         #LISTS
@@ -257,14 +275,14 @@ def defaultenv():
     ])
     #MACROS
     macros = Environment({}, parent = None)
-    #TODO: find out way to build in macros
-    return env,macros
+    #Hard to have builtin macros because hard to eval in builtin macros
+    return env, macros
 
-globalz,macros = defaultenv()
-def execute(parsed):         #executes program
+startvars, macros = defaultenv()
+def execute(parsed):          #executes program
     """Executes program."""
     for i in iterate(parsed):
-        evaluate(i, globalz, macros)    #run each lisp.
+        evaluate(i, startvars, macros)    #run each lisp.
 
 def run(program):
     execute(syntax_sugar(parse(tokenise(program))))
@@ -273,9 +291,9 @@ if __name__ == "__main__": #auto-test
     test ="""
 (defmacro or
  (lambda (x y)
-  ((lambda ($gensym?$my-long-name$add-hygiene-later$)
+  ((lambda (t)
    (list 'cond
-    (list $gensym?$my-long-name$add-hygiene-later$ $gensym?$my-long-name$add-hygiene-later$)
+    (list t t)
     (list '(quote t) y)))
   x)
  )
@@ -289,8 +307,24 @@ if __name__ == "__main__": #auto-test
   )
  )
 )
-
+(write 'fibonacci-test-7)
 (write (fibonacci 7))
+(write 'macro-or-test-2)
 (write ((lambda (t) (or t 2)) '()))
+(write 'evaluation-test-x)
+(write ((lambda (x) x) 'x)) 
+(write 'let-env-basic-test-2)
+(let-env (current-env) (write ((lambda (t) (or '() t)) 2)))
+(define x 2)
+(define env (current-env))
+(write 'set-env!-basic-test-2)
+(set-env! env)
+(write x)
+(define env (current-env))
+(define x 1)
+(set-env! env)
+(write 'set-env!-advanced-test-2)
+(write x)
+(exit 0)
 """
     run(test)
