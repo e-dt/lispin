@@ -14,6 +14,20 @@
 #
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+##TODO:
+##* rest of environment functions
+##  e.g. set-parent! with-parent parent parent?
+##       set-var     with-var    var-in-env?
+##
+##* strings!
+##  have to make Symbol class
+##
+##* dynamic variables
+##  pass around a `dynvars` variable
+##  dynmacros?
+##  will complicate environment functions, but not much
+##
 import copy
 def pretty_print(lst):
     new = []
