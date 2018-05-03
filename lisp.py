@@ -16,9 +16,6 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 ##TODO:
-##* strings!
-##  have to make Symbol class
-##
 ##* dynamic variables
 ##  pass around a `dynvars` variable
 ##  dynmacros?
@@ -79,13 +76,16 @@ class Environment(dict):
         """Gets innermost environment in which `var` appears."""
         return self if var in self else self.parent.innermost(var)
 
+class Symbol(str):
+    pass #is the same
+
 def syntax_sugar(program):
     new = []
     index = 0
     while index < len(program):
         val = program[index]
-        if val == "'": #'x -> (quote x)
-            new.append(["quote", program[index+1]])
+        if val == Symbol("'"): #'x -> (quote x)
+            new.append([Symbol("quote"), program[index+1]])
             index += 1 #skip next value, as it is already used in the quote expr
         elif type(val) == list:
             new.append(syntax_sugar(val))#recurse
@@ -148,24 +148,35 @@ def iterate(linked): #makes an iterable out of a linked list. needed because lin
 def tokenise(code_str):
     tokenised = []
     token_built = ""
-    for i in code_str: 
+    string_mode = False
+    for i in code_str:
+        if string_mode:
+            if i != '"':
+                token_built += i
+                continue
+            else:
+                string_mode = False
+                continue
+        if i == '"':
+            string_mode = True
+            continue
         if i == "(":
             if (token_built != ""): tokenised.append(token_built)
             token_built = ""
-            tokenised.append("(") #tokens are represented by themselves for now
+            tokenised.append(Symbol("(")) #tokens are represented by themselves for now
         elif i == ")":
             if (token_built != ""): tokenised.append(token_built)
             token_built = ""
-            tokenised.append(")")
+            tokenised.append(Symbol(")"))
         elif i == " " or i == "\n":
             if (token_built != ""): tokenised.append(token_built) 
             token_built = ""
         elif i == "'":
             if (token_built != ""): tokenised.append(token_built)
             token_built = ""
-            tokenised.append("'")
+            tokenised.append(Symbol("'"))
         else:
-            token_built += i
+            token_built = Symbol(token_built + Symbol(i))
 
     return tokenised
 
@@ -176,9 +187,9 @@ def parse(tokenised):
     #I was sleep-deprived, okay?
     listy = [[]]
     for token in tokenised:
-        if token == "(":
+        if token == Symbol("("):
             listy.append([])
-        elif token == ")":
+        elif token == Symbol(")"):
             listy[-2].append(listy.pop())
         else:
             try:
@@ -205,33 +216,33 @@ def apply(function, localvars, macros):
         function = macroexpand(function, localvars, macros)
     except:
         pass
-    if function.car == 'quote': #required to fix a bug
+    if function.car == Symbol('quote'): #required to fix a bug
         return function.cdr.car #maybe? unnecessary but who knows
     func, vals = func_n_vals(function)
-    if func == 'cond':
+    if func == Symbol('cond'):
         for cons in vals:
             if evaluate(cons.car, localvars, macros) != None:    #None is the only false value; it is also the empty list.
                 return evaluate(cons.cdr.car, localvars, macros) #
         raise Exception('no default in cond, and it fell through!!') #should this be the behaviour? discuss.
-    elif func == 'lambda': 
+    elif func == Symbol('lambda'): 
         return LispFunction(function, localvars, macros)
-    elif func == 'define':
+    elif func == Symbol('define'):
         localvars[vals[0]] = evaluate(vals[1], localvars, macros)
         return localvars[vals[0]]
-    elif func == 'set!':
+    elif func == Symbol('set!'):
         localvars.innermost(vals[0])[vals[0]] = evaluate(vals[1], localvars, macros)
         return localvars.innermost(vals[0])[vals[0]]
-    elif func == 'defmacro':
+    elif func == Symbol('defmacro'):
         macros[vals[0]] =  evaluate(vals[1], localvars, macros)
-    elif func == 'current-env':
+    elif func == Symbol('current-env'):
         return (copy.deepcopy(localvars),#here the mutable nature of dicts
                 copy.deepcopy(macros))   #works against us, requiring a copy
-    elif func == 'let-env':
+    elif func == Symbol('let-env'):
         newvars, newmacros = evaluate(vals[0], localvars, macros)
         a=LispFunction(recursive_mll(["lambda", [[]], vals[1]]),
                        newvars, newmacros)
         return a()
-    elif func == 'set-env!':
+    elif func == Symbol('set-env!'):
         newvars, newmacros = evaluate(vals[0], localvars, macros)
         if localvars is startvars: #i.e. if top-level (dicts mutable)
             startvars = newvars
@@ -246,7 +257,7 @@ def evaluate(expr,localvars,macros):
     if type(expr) == Cons:
         return apply(expr,localvars, macros)
     else:
-        if type(expr) == str:
+        if type(expr) == Symbol:
             #print(expr)
             return localvars.innermost(expr)[expr]#variables!
         else:
@@ -261,7 +272,7 @@ def defaultenv():
     def eq(val0, val1):                              #MCCARTHY PAPER VERSION
         if type(val0) == Cons or type(val1) == Cons:
             raise Exception("eq doesn't take a cons") #why not? i don't know, but this is helpful to me
-        return "t" if val0 == val1 else None 
+        return Symbol("t") if val0 == val1 else None 
     def begin(*vals):
         return vals[-1] #all arguments are evaluated, the last is returned. nice
     def lst(*vals):
@@ -291,16 +302,16 @@ def defaultenv():
     def in_envp(environment, a):
         try:
             environment[0].innermost(a)
-            return "t"
+            return Symbol("t")
         except:
             return None
     def in_top_envp(environment, a):
         try:
             environment[0][a]
-            return 't'
+            return Symbol("t")
         except:
             return None
-    env.update([
+    env.update([(Symbol(i[0]),i[1]) for i in [
         ('eq?', eq), #('eq?', (lambda x,y: x is y), #SCHEME VERSION
         ('car', (lambda x: x.car)),
         ('cdr', (lambda x: x.cdr)),
@@ -310,14 +321,14 @@ def defaultenv():
         ('exit', (lambda x=None: exit() if x == None else exit(x))),
         ('write', (lambda x: print(x) or x)), #dirty hack -- print always returns None :. this always returns x, but prints x first.
         #ENV
-        ('environment?', (lambda x: "t" if\
+        ('environment?', (lambda x: Symbol("t") if\
                           ((type(x[0]) == Environment) and\
                           (type(x[1]) == Environment) and\
                            (type(x) == tuple)) else None)),
         ('set-parent!', set_parent),
         ('modify-parent', modify_parent),
         ('parent', (lambda x: (x[0].parent, x[1].parent))),
-        ('parent?', (lambda x, y: 't' if ((x[0].parent is y[0]) and (x[1].parent is y[1])) else None)),
+        ('parent?', (lambda x, y: Symbol("t") if ((x[0].parent is y[0]) and (x[1].parent is y[1])) else None)),
         ('set-in-env!', set_env),
         ('modify-in-env', modify_env),
         ('define-in-env!', define_env),
@@ -333,11 +344,11 @@ def defaultenv():
         #LOGIC
         ('and', (lambda x, y: (x != None) and (y != None))), #PLEASE NOTE NONTY SPECIAL FORM
         #TODO: write as macro !
-        ('not', (lambda x: "t" if x == None else None)),
+        ('not', (lambda x: Symbol("t") if x == None else None)),
         ('number?', (lambda x: type(x) == int or type(x) == float)),
         #LISTS
         ('list', lst)
-    ])
+    ]])
     #MACROS
     macros = Environment({}, parent = None)
     #Hard to have builtin macros because hard to eval in builtin macros
@@ -354,6 +365,7 @@ def run(program):
 
 if __name__ == "__main__": #auto-test
     test ="""
+(write "hello")
 (defmacro or
  (lambda (x y)
   ((lambda (t)
