@@ -16,10 +16,6 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 ##TODO:
-##* rest of environment functions
-##  e.g. set-parent! with-parent parent parent?
-##       set-var     with-var    var-in-env?
-##
 ##* strings!
 ##  have to make Symbol class
 ##
@@ -62,8 +58,12 @@ class LispFunction:
         #PLEASE NOTE -- lambdas only take one expression.
         #if you want to use more than one, use a (begin ...)
         self.macros = macros
-    def __call__(self, *vals):
-        newenv = Environment(self.env, parent=self.env)
+    def __call__(self, *vals, inheritedcontext=None):
+        if inheritedcontext != None:
+            env = inheritedcontext
+        else:
+            env = self.env
+        newenv = Environment(env, parent=env)
         newenv.update(zip(self.args,vals)) #defines the arguments' values to be the values passed in
         return evaluate(self.returnv, newenv, Environment(self.macros,parent=self.macros))
     def __repr__(self):
@@ -247,6 +247,7 @@ def evaluate(expr,localvars,macros):
         return apply(expr,localvars, macros)
     else:
         if type(expr) == str:
+            #print(expr)
             return localvars.innermost(expr)[expr]#variables!
         else:
             return expr
@@ -265,6 +266,40 @@ def defaultenv():
         return vals[-1] #all arguments are evaluated, the last is returned. nice
     def lst(*vals):
         return make_linked_list(vals)
+    def set_parent(environment, parentenv):
+        environment[0].parent, environment[1].parent = parentenv
+        return environment
+    def modify_parent(environment, parentenv):
+        newenv = copy.deepcopy(environment)
+        newenv[0].parent, newenv[1].parent = parentenv
+        return newenv
+    def set_env(environment, a, b):
+        environment[0].innermost(a)[a] = b
+        return environment
+    def modify_env(environment, a, b):
+        newenv = copy.deepcopy(environment)
+        newenv.innermost[0](a)[a] = b
+        return newenv
+    def define_env(environment, a, b):
+        environment[0][a] = b
+        return environment
+    def defmodify_env(environment, a, b):
+        newenv = copy.deepcopy(environment)
+        newenv[0][a] = b
+        return environment
+    #cant be arsed to do macro env functions rn, TODO
+    def in_envp(environment, a):
+        try:
+            environment[0].innermost(a)
+            return "t"
+        except:
+            return None
+    def in_top_envp(environment, a):
+        try:
+            environment[0][a]
+            return 't'
+        except:
+            return None
     env.update([
         ('eq?', eq), #('eq?', (lambda x,y: x is y), #SCHEME VERSION
         ('car', (lambda x: x.car)),
@@ -274,6 +309,22 @@ def defaultenv():
         ('begin', begin),
         ('exit', (lambda x=None: exit() if x == None else exit(x))),
         ('write', (lambda x: print(x) or x)), #dirty hack -- print always returns None :. this always returns x, but prints x first.
+        #ENV
+        ('environment?', (lambda x: "t" if\
+                          ((type(x[0]) == Environment) and\
+                          (type(x[1]) == Environment) and\
+                           (type(x) == tuple)) else None)),
+        ('set-parent!', set_parent),
+        ('modify-parent', modify_parent),
+        ('parent', (lambda x: (x[0].parent, x[1].parent))),
+        ('parent?', (lambda x, y: 't' if ((x[0].parent is y[0]) and (x[1].parent is y[1])) else None)),
+        ('set-in-env!', set_env),
+        ('modify-in-env', modify_env),
+        ('define-in-env!', define_env),
+        ('modify-define-in-env', defmodify_env),
+        ('in-env', (lambda x, y: x.innermost(y)[y])),
+        ('in-env?', in_envp),
+        ('in-top-env?', in_top_envp),
         #MATHS
         ('+', (lambda x, y: x+y)),
         ('-', (lambda x, y: x-y)),
@@ -339,6 +390,9 @@ if __name__ == "__main__": #auto-test
 (set-env! env)
 (write 'set-env!-advanced-test-2)
 (write x)
+(define env (current-env))
+(write 'parent-env-test-t)
+(write (parent? env (parent env)))
 (exit 0)
 """
     run(test)
