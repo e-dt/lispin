@@ -1,4 +1,3 @@
-
 #Lispin. A lisp interpreter.
 #    Copyright (C) 2018  e-dt
 #
